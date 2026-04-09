@@ -33,6 +33,26 @@ export const router = createBrowserRouter([
     Component: AdminDashboard,
   },
   {
+    path: "/admin/queue",
+    Component: AdminDashboard,
+  },
+  {
+    path: "/admin/patients",
+    Component: AdminDashboard,
+  },
+  {
+    path: "/admin/billing",
+    Component: AdminDashboard,
+  },
+  {
+    path: "/admin/reports",
+    Component: AdminDashboard,
+  },
+  {
+    path: "/admin/settings",
+    Component: AdminDashboard,
+  },
+  {
     path: "*",
     Component: NotFound,
   },

@@ -18,6 +18,7 @@ export function Sidebar({ clinicName = "Mumbai North Clinic", clinicLocation = "
     { path: '/admin/queue', icon: Clock, label: 'Queue' },
     { path: '/admin/patients', icon: Users, label: 'Patients' },
     { path: '/admin/billing', icon: FileText, label: 'Billing' },
+    { path: '/admin/reports', icon: FileText, label: 'Reports' },
     { path: '/admin/settings', icon: Settings, label: 'Settings' },
   ];
 

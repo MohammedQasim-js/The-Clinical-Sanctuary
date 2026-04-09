@@ -14,10 +14,36 @@ export interface Clinic {
   adminPassword?: string;
 }
 
+export interface Bill {
+  id: string;
+  clinicId: string;
+  patientName: string;
+  phoneNumber: string;
+  tokenNumber: number;
+  invoiceId: string;
+  serviceDate: string;
+  amount: number;
+  status: 'paid' | 'unpaid' | 'pending';
+  description: string;
+  createdAt: string;
+  paidAt?: string;
+}
+
+export interface Notification {
+  id: string;
+  clinicId: string;
+  title: string;
+  body: string;
+  type: 'info' | 'warning' | 'success' | 'billing' | 'token';
+  read: boolean;
+  createdAt: string;
+}
+
 export interface Patient {
   phoneNumber: string;
   name?: string;
   lastVisit?: string;
+  internalId?: string;
 }
 
 export interface Token {
@@ -124,12 +150,86 @@ const SAMPLE_CLINICS: Clinic[] = [
   }
 ];
 
+const SAMPLE_BILLS: Bill[] = [
+  {
+    id: 'bill_1',
+    clinicId: '1',
+    patientName: 'Rajesh Kumar',
+    phoneNumber: '9876543210',
+    tokenNumber: 42,
+    invoiceId: 'INV-2024-001',
+    serviceDate: '2023-10-24T10:30:00.000Z',
+    amount: 4500,
+    status: 'paid',
+    description: 'Specialist consultation and ECG',
+    createdAt: '2023-10-24T10:30:00.000Z'
+  },
+  {
+    id: 'bill_2',
+    clinicId: '1',
+    patientName: 'Anjali Singh',
+    phoneNumber: '9876500011',
+    tokenNumber: 108,
+    invoiceId: 'INV-2024-002',
+    serviceDate: '2023-10-24T14:15:00.000Z',
+    amount: 1250,
+    status: 'unpaid',
+    description: 'Follow-up consultation',
+    createdAt: '2023-10-24T14:15:00.000Z'
+  },
+  {
+    id: 'bill_3',
+    clinicId: '1',
+    patientName: 'Vikram Mehta',
+    phoneNumber: '9876500012',
+    tokenNumber: 3,
+    invoiceId: 'INV-2024-003',
+    serviceDate: '2023-10-23T09:00:00.000Z',
+    amount: 12800,
+    status: 'paid',
+    description: 'Diagnostic imaging package',
+    createdAt: '2023-10-23T09:00:00.000Z'
+  }
+];
+
+const SAMPLE_NOTIFICATIONS: Notification[] = [
+  {
+    id: 'notification_1',
+    clinicId: '1',
+    title: 'Token #42 issued',
+    body: 'Rohan Deshmukh was added to the queue and is waiting for consultation.',
+    type: 'token',
+    read: false,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'notification_2',
+    clinicId: '1',
+    title: 'Billing ready',
+    body: 'Invoice INV-2024-001 has been generated and marked as paid.',
+    type: 'billing',
+    read: true,
+    createdAt: new Date().toISOString()
+  },
+  {
+    id: 'notification_3',
+    clinicId: '1',
+    title: 'Delay alert',
+    body: 'Queue A-40 is delayed by 15 minutes. Patients were notified automatically.',
+    type: 'warning',
+    read: false,
+    createdAt: new Date().toISOString()
+  }
+];
+
 class StorageService {
   private KEYS = {
     CLINICS: 'clinics',
     PATIENTS: 'patients',
     TOKENS: 'tokens',
     VISITS: 'visits',
+    BILLS: 'bills',
+    NOTIFICATIONS: 'notifications',
     CURRENT_USER: 'currentUser',
     INITIALIZED: 'initialized'
   };
@@ -167,6 +267,11 @@ class StorageService {
     if (index !== -1) {
       clinics[index] = clinic;
       localStorage.setItem(this.KEYS.CLINICS, JSON.stringify(clinics));
+
+      const currentUser = this.getCurrentUser();
+      if (currentUser?.id === clinic.id) {
+        localStorage.setItem(this.KEYS.CURRENT_USER, JSON.stringify(clinic));
+      }
     }
   }
 
@@ -246,6 +351,16 @@ class StorageService {
     allTokens.push(token);
     localStorage.setItem(this.KEYS.TOKENS, JSON.stringify(allTokens));
 
+    this.saveNotification({
+      id: `notification_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      clinicId,
+      title: `Token #${newTokenNumber} issued`,
+      body: `A new token was generated for ${phoneNumber}.`,
+      type: 'token',
+      read: false,
+      createdAt: now.toISOString()
+    });
+
     // Save patient if new
     if (!this.getPatient(phoneNumber)) {
       this.savePatient({ phoneNumber, lastVisit: now.toISOString() });
@@ -304,6 +419,75 @@ class StorageService {
     const visits = this.getVisits();
     visits.push(visit);
     localStorage.setItem(this.KEYS.VISITS, JSON.stringify(visits));
+  }
+
+  getVisitsByClinic(clinicId: string): Visit[] {
+    const visits = this.getVisits();
+    return visits
+      .filter(visit => visit.clinicId === clinicId)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  getBills(): Bill[] {
+    const data = localStorage.getItem(this.KEYS.BILLS);
+    return data ? JSON.parse(data) : [];
+  }
+
+  getBillsByClinic(clinicId: string): Bill[] {
+    const bills = this.getBills();
+    return bills
+      .filter(bill => bill.clinicId === clinicId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  saveBill(bill: Bill) {
+    const bills = this.getBills();
+    const index = bills.findIndex(item => item.id === bill.id);
+
+    if (index !== -1) {
+      bills[index] = bill;
+    } else {
+      bills.unshift(bill);
+    }
+
+    localStorage.setItem(this.KEYS.BILLS, JSON.stringify(bills));
+  }
+
+  getNotifications(): Notification[] {
+    const data = localStorage.getItem(this.KEYS.NOTIFICATIONS);
+    return data ? JSON.parse(data) : [];
+  }
+
+  getNotificationsByClinic(clinicId: string): Notification[] {
+    const notifications = this.getNotifications();
+    return notifications
+      .filter(notification => notification.clinicId === clinicId)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  saveNotification(notification: Notification) {
+    const notifications = this.getNotifications();
+    const index = notifications.findIndex(item => item.id === notification.id);
+
+    if (index !== -1) {
+      notifications[index] = notification;
+    } else {
+      notifications.unshift(notification);
+    }
+
+    localStorage.setItem(this.KEYS.NOTIFICATIONS, JSON.stringify(notifications));
+  }
+
+  markAllNotificationsRead(clinicId?: string) {
+    const notifications = this.getNotifications().map(notification => {
+      if (!clinicId || notification.clinicId === clinicId) {
+        return { ...notification, read: true };
+      }
+
+      return notification;
+    });
+
+    localStorage.setItem(this.KEYS.NOTIFICATIONS, JSON.stringify(notifications));
   }
 }
 
